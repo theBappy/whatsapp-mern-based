@@ -1,3 +1,5 @@
+import { uploadFileToCloudinary } from "../configs/cloudinary.js";
+import { Conversation } from "../models/Conversation.js";
 import { User } from "../models/User.js";
 import { sentOtpToEmail } from "../services/email-service.js";
 import { sendOtpToPhoneNumber, verifyOtp } from "../services/twillo-phone.js";
@@ -49,7 +51,9 @@ export const sendOtp = async (req, res) => {
     await sendOtpToPhoneNumber(fullPhoneNumber);
     await user.save();
 
-    return response(res, 200, "OTP sent successfully", { phoneNumber: fullPhoneNumber });
+    return response(res, 200, "OTP sent successfully", {
+      phoneNumber: fullPhoneNumber,
+    });
   } catch (error) {
     console.error(error);
     return response(res, 500, "Internal server error");
@@ -109,6 +113,91 @@ export const verifyOtpLogic = async (req, res) => {
     });
 
     return response(res, 200, "OTP verified successfully", { token, user });
+  } catch (error) {
+    console.error(error);
+    return response(res, 500, "Internal server error");
+  }
+};
+
+export const profileUpdate = async (req, res) => {
+  const { userName, agreed, about } = req.body;
+  const userId = req.user.userId;
+
+  try {
+    const user = await User.findById(userId);
+    const file = req.file;
+    if (file) {
+      const uploadResult = await uploadFileToCloudinary(file);
+      console.log(uploadResult);
+
+      user.profilePicture = uploadResult?.secure_url;
+    } else if (req.body.profilePicture) {
+      user.profilePicture = req.body.profilePicture;
+    }
+    if (userName) user.userName = userName;
+    if (agreed) user.agreed = agreed;
+    if (about) user.about = about;
+
+    await user.save();
+
+    return response(res, 200, "User profile updated successfully", user);
+  } catch (error) {
+    console.error(error);
+    return response(res, 500, "Internal server error");
+  }
+};
+
+export const checkAuthenticate = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    if (!userId) {
+      return response(res, 404, "Unauthorized, please login.");
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return response(res, 404, "User not found.");
+    }
+    return response(res, 200, "User retrieved and allowed.", user);
+  } catch (error) {
+    console.error(error);
+    return response(res, 500, "Internal server error");
+  }
+};
+
+export const logout = (req, res) => {
+  try {
+    res.cookie("auth_token", "", { expires: new Date(0) });
+    return response(res, 200, "User logged out successfully");
+  } catch (error) {
+    console.error(error);
+    return response(res, 500, "Internal server error");
+  }
+};
+export const getAllUsers = async (req, res) => {
+  const loggedInUser = req.user.userId;
+  try {
+    const users = await User.find({ _id: { $ne: loggedInUser } })
+      .select(
+        "userName about lastSeen profilePicture isOnline phoneNumber phoneSuffix"
+      )
+      .lean();
+    const userWithConversation = await Promise.all(
+      users.map(async (user) => {
+        const conversation = await Conversation.findOne({
+          participants: { $all: [loggedInUser, user?._id] },
+        })
+          .populate({
+            path: "lastMessage",
+            select: "content createdAt sender receiver",
+          })
+          .lean();
+        return {
+          ...user,
+          conversation: conversation | null,
+        };
+      })
+    );
+    return response(res, 200, "User retrieved successfully", userWithConversation)
   } catch (error) {
     console.error(error);
     return response(res, 500, "Internal server error");

@@ -5,6 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./configs/db-connect.js";
 import authRoutes from "./routes/auth-routes.js"
+import chatRoutes from "./routes/chat-routes.js"
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ connectDB();
 
 //routes
 app.use("/api/auth", authRoutes)
+app.use("/api/chat", chatRoutes)
 
 
 app.listen(PORT, () => {

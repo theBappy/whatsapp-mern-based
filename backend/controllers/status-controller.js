@@ -53,6 +53,16 @@ export const createStatus = async (req, res) => {
       .populate("user", "userName profilePicture")
       .populate("viewers", "userName profilePicture");
 
+    //emit socket event
+    if (req.io && req.socketUserMap) {
+      //broadcast to connected user except creator
+      for (const [connectedUserId, socketId] of req.socketUserMap) {
+        if (connectedUserId !== userId) {
+          req.io.to(socketId).emit("new_status", populatedStatus);
+        }
+      }
+    }
+
     return response(res, 201, "Status created successfully", populatedStatus);
   } catch (error) {
     console.error(error);
@@ -76,7 +86,6 @@ export const getStatus = async (req, res) => {
   }
 };
 
-
 export const viewStatus = async (req, res) => {
   const { statusId } = req.params;
   const userId = req.user.userId;
@@ -93,7 +102,7 @@ export const viewStatus = async (req, res) => {
     }
 
     // Add current user to viewers if not already included
-    if (!status.viewers.some(v => v.toString() === userId)) {
+    if (!status.viewers.some((v) => v.toString() === userId)) {
       status.viewers.push(userId);
       await status.save();
     }
@@ -102,6 +111,24 @@ export const viewStatus = async (req, res) => {
     const populatedStatus = await Status.findById(statusId)
       .populate("user", "userName profilePicture")
       .populate("viewers", "userName profilePicture");
+
+    //emit socket event
+    if (req.io && req.socketUserMap) {
+      const statusOwnerSocketId = req.socketUserMap.get(
+        status.user._id.toString()
+      );
+      if (statusOwnerSocketId) {
+        const viewData = {
+          statusId,
+          viewerId: userId,
+          totalViewers: populatedStatus.viewers.length,
+          viewers: populatedStatus.viewers,
+        };
+        req.io.to(statusOwnerSocketId).emit("status_viewed", viewData);
+      } else {
+        console.log(`Status owner are not connected`);
+      }
+    }
 
     return response(res, 200, "Status viewed successfully", populatedStatus);
   } catch (error) {
@@ -126,6 +153,14 @@ export const deleteStatus = async (req, res) => {
     }
 
     await status.deleteOne();
+
+    if (req.io && req.socketUserMap) {
+      for (const [connectedUserId, socketId] of req.socketUserMap) {
+        if (connectedUserId !== userId) {
+          req.io.to(socketId).emit("status_deleted", statusId);
+        }
+      }
+    }
 
     return response(res, 200, "Status deleted successfully", status);
   } catch (error) {

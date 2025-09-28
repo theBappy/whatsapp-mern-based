@@ -66,6 +66,16 @@ export const sendMessage = async (req, res) => {
       .populate("sender", "userName profilePicture")
       .populate("receiver", "userName profilePicture");
 
+    //emit socket event for real time
+    if (req.io && req.socketUserMap) {
+      const receiverSocketId = req.socketUserMap.get(receiverId);
+      if (receiverSocketId) {
+        req.io.to(receiverSocketId).emit("receive_message", populatedMessage);
+        message.messageStatus = "delivered";
+        await message.save();
+      }
+    }
+
     return response(res, 201, "Message sent successfully", populatedMessage);
   } catch (error) {
     console.error(error);
@@ -148,15 +158,36 @@ export const markAsRead = async (req, res) => {
   }
 
   try {
+    // Bulk update
     await Message.updateMany(
       { _id: { $in: messageIds }, receiver: userId },
       { $set: { messageStatus: "read" } }
     );
 
-    const updatedMessages = await Message.find({
+    // Re-fetch updated messages
+    const messages = await Message.find({
       _id: { $in: messageIds },
       receiver: userId,
-    });
+    }).lean();
+
+    // Ensure statuses are updated in the response
+    const updatedMessages = messages.map((m) => ({
+      ...m,
+      messageStatus: "read",
+    }));
+
+    // Notify senders in real time
+    if (req.io && req.socketUserMap) {
+      for (const message of updatedMessages) {
+        const senderSocketId = req.socketUserMap.get(message.sender.toString());
+        if (senderSocketId) {
+          req.io.to(senderSocketId).emit("message_read", {
+            _id: message._id,
+            messageStatus: "read",
+          });
+        }
+      }
+    }
 
     return response(res, 200, "Messages marked as read", updatedMessages);
   } catch (error) {
@@ -173,12 +204,21 @@ export const deleteMessage = async (req, res) => {
     if (!message) {
       return response(res, 404, "Message not found");
     }
-    if(message.sender.toString() !== userId){
-        return response(res, 401, "Not authorized to delete this message")
+    if (message.sender.toString() !== userId) {
+      return response(res, 401, "Not authorized to delete this message");
     }
-    await message.deleteOne()
+    await message.deleteOne();
 
-    return response(res, 200, "Message deleted successfully")
+    if (req.io && req.socketUserMap) {
+      const receiverSocketId = req.socketUserMap.get(
+        message.receiver.toString()
+      );
+      if (receiverSocketId) {
+        req.io.to(receiverSocketId).emit("message_deleted", messageId);
+      }
+    }
+
+    return response(res, 200, "Message deleted successfully");
   } catch (error) {
     console.error(error);
     return response(res, 500, "Internal server error");

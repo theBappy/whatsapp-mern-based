@@ -1,8 +1,8 @@
 export const countries = [
+  { dialCode: "+81", flag: "🇯🇵", alpha2: "JP", name: "Japan" },
     { dialCode: "+91", flag: "🇮🇳", alpha2: "IN", name: "India" },
     { dialCode: "+7", flag: "🇷🇺", alpha2: "RU", name: "Russia" },
     { dialCode: "+7", flag: "🇰🇿", alpha2: "KZ", name: "Kazakhstan" },
-    { dialCode: "+81", flag: "🇯🇵", alpha2: "JP", name: "Japan" },
     { dialCode: "+82", flag: "🇰🇷", alpha2: "KR", name: "South Korea" },
     { dialCode: "+84", flag: "🇻🇳", alpha2: "VN", name: "Vietnam" },
     { dialCode: "+850", flag: "🇰🇵", alpha2: "KP", name: "North Korea" },

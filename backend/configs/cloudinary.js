@@ -20,6 +20,32 @@ const fileFilter = (req, file, cb) => {
   } else {
     cb(new Error("Only images and videos are allowed!"), false);
   }
+};export const profileUpdate = async (req, res) => {
+  const { userName, agreed, about } = req.body;
+  const userId = req.user.userId;
+
+  try {
+    const user = await User.findById(userId);
+    const file = req.file;
+    if (file) {
+      const uploadResult = await uploadFileToCloudinary(file);
+      console.log(uploadResult);
+
+      user.profilePicture = uploadResult?.secure_url;
+    } else if (req.body.profilePicture) {
+      user.profilePicture = req.body.profilePicture;
+    }
+    if (userName) user.userName = userName;
+    if (agreed) user.agreed = agreed;
+    if (about) user.about = about;
+
+    await user.save();
+
+    return response(res, 200, "User profile updated successfully", user);
+  } catch (error) {
+    console.error(error);
+    return response(res, 500, "Internal server error");
+  }
 };
 
 export const multerMiddleware = multer({

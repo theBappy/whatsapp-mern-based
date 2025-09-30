@@ -24,11 +24,18 @@ export const verifyOtp = async (email, otp) => {
   }
 };
 
-// ✅ Update profile
 export const updateUserProfile = async (updateData) => {
   try {
-    const response = await axiosInstance.put("/auth/update-profile", updateData);
-    return response.data;
+    const token = localStorage.getItem("token");
+
+    const response = await axiosInstance.put("/auth/update-profile", updateData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return response.data.data; // updated user object
   } catch (error) {
     throw error.response ? error.response.data : error.message;
   }

@@ -1,8 +1,9 @@
-import { uploadFileToCloudinary } from "../configs/cloudinary.js";
+
 import { Conversation } from "../models/Conversation.js";
 import { User } from "../models/User.js";
 import { sentOtpToEmail } from "../services/email-service.js";
 import { sendOtpToPhoneNumber, verifyOtp } from "../services/twillo-phone.js";
+import { uploadFileToCloudinary } from "../utils/cloudinaryUpload.js";
 import { generateToken } from "../utils/generate-token.js";
 import { otpGenerate } from "../utils/otp-generator.js";
 import { response } from "../utils/response-handler.js";
@@ -119,23 +120,26 @@ export const verifyOtpLogic = async (req, res) => {
   }
 };
 
+
 export const profileUpdate = async (req, res) => {
   const { userName, agreed, about } = req.body;
   const userId = req.user.userId;
 
   try {
     const user = await User.findById(userId);
-    const file = req.file;
-    if (file) {
-      const uploadResult = await uploadFileToCloudinary(file);
-      console.log(uploadResult);
+    if (!user) return response(res, 404, "User not found");
 
-      user.profilePicture = uploadResult?.secure_url;
+    if (req.file) {
+      // File uploaded, push to Cloudinary
+      const uploadResult = await uploadFileToCloudinary(req.file);
+      user.profilePicture = uploadResult.secure_url;
     } else if (req.body.profilePicture) {
+      // If no file, use provided URL (e.g., avatar from frontend)
       user.profilePicture = req.body.profilePicture;
     }
+
     if (userName) user.userName = userName;
-    if (agreed) user.agreed = agreed;
+    if (typeof agreed !== "undefined") user.agreed = agreed;
     if (about) user.about = about;
 
     await user.save();
@@ -193,7 +197,7 @@ export const getAllUsers = async (req, res) => {
           .lean();
         return {
           ...user,
-          conversation: conversation | null,
+          conversation: conversation || null,
         };
       })
     );

@@ -9,15 +9,26 @@ import { avatars } from "../../utils/data";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaWhatsapp, FaPlus } from "react-icons/fa";
-import { sentOtp, verifyOtp, updateUserProfile, checkUserAuth } from "../../services/user-services";
+import {
+  sentOtp,
+  verifyOtp,
+  updateUserProfile,
+  checkUserAuth,
+} from "../../services/user-services";
 
 const loginValidationSchema = yup.object().shape({
-  email: yup.string().required("Email is required").email("Please enter a valid email"),
+  email: yup
+    .string()
+    .required("Email is required")
+    .email("Please enter a valid email"),
 });
 
 const profileValidationSchema = yup.object().shape({
   userName: yup.string().required("Username is required"),
-  agreed: yup.boolean().required().oneOf([true], "You must agree to the terms and conditions"),
+  agreed: yup
+    .boolean()
+    .required()
+    .oneOf([true], "You must agree to the terms and conditions"),
 });
 
 const UserLogin = () => {
@@ -27,6 +38,7 @@ const UserLogin = () => {
   const [error, setError] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [uploadedPic, setUploadedPic] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [userFromDb, setUserFromDb] = useState(null);
   const navigate = useNavigate();
 
@@ -34,17 +46,29 @@ const UserLogin = () => {
   const fileInputRef = useRef(null);
 
   // Step 1: Email
-  const { register: loginRegister, handleSubmit: handleLoginSubmit, watch } = useForm({
+  const {
+    register: loginRegister,
+    handleSubmit: handleLoginSubmit,
+    watch,
+  } = useForm({
     resolver: yupResolver(loginValidationSchema),
   });
 
   // Step 3: Profile
-  const { register: profileRegister, handleSubmit: handleProfileSubmit, setValue: setProfileValue } = useForm({
+  const {
+    register: profileRegister,
+    handleSubmit: handleProfileSubmit,
+    setValue: setProfileValue,
+  } = useForm({
     resolver: yupResolver(profileValidationSchema),
   });
 
   const ProgressBar = () => (
-    <div className={`w-full ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"} rounded-full h-2.5 mb-6`}>
+    <div
+      className={`w-full ${
+        theme === "dark" ? "bg-gray-700" : "bg-gray-200"
+      } rounded-full h-2.5 mb-6`}
+    >
       <div
         className="bg-green-500 h-2.5 rounded-full transition-all duration-500 ease-in-out"
         style={{ width: `${(step / 3) * 100}%` }}
@@ -94,10 +118,13 @@ const UserLogin = () => {
       const authCheck = await checkUserAuth();
       if (authCheck?.isAuthenticated) {
         setUserFromDb(authCheck.user);
-        const defaultAvatar = authCheck.user?.profilePicture || avatars[Math.floor(Math.random() * avatars.length)];
+        const defaultAvatar =
+          authCheck.user?.profilePicture ||
+          avatars[Math.floor(Math.random() * avatars.length)];
         setSelectedAvatar(defaultAvatar);
         setProfileValue("userName", authCheck.user?.userName || "");
-        setUploadedPic(authCheck.user?.profilePicture || null);
+        setUploadedPic(null); // clear previous blob
+        setUploadedFile(null);
       }
 
       setStep(3);
@@ -110,8 +137,18 @@ const UserLogin = () => {
   const onProfileSubmitHandler = async (data) => {
     try {
       setError("");
-      const updateData = { userName: data.userName, agreed: data.agreed, profilePicture: uploadedPic || selectedAvatar };
-      const updatedUser = await updateUserProfile(updateData);
+
+      const formData = new FormData();
+      formData.append("userName", data.userName);
+      formData.append("agreed", data.agreed);
+
+      if (uploadedFile) {
+        formData.append("media", uploadedFile); // matches multer single("media")
+      } else if (selectedAvatar) {
+        formData.append("profilePicture", selectedAvatar);
+      }
+
+      const updatedUser = await updateUserProfile(formData);
       setUser(updatedUser);
       resetLoginState();
       navigate("/");
@@ -122,40 +159,66 @@ const UserLogin = () => {
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (file) setUploadedPic(URL.createObjectURL(file));
+    if (file) {
+      setUploadedPic(URL.createObjectURL(file)); // preview
+      setUploadedFile(file); // real file to send to backend
+    }
   };
 
   return (
-    <div className={`min-h-screen ${theme === "dark" ? "bg-gray-900" : "bg-gradient-to-br from-green-400 to-blue-500"} flex items-center justify-center p-4`}>
+    <div
+      className={`min-h-screen ${
+        theme === "dark"
+          ? "bg-gray-900"
+          : "bg-gradient-to-br from-green-400 to-blue-500"
+      } flex items-center justify-center p-4`}
+    >
       <motion.div
         initial={{ opacity: 0, y: -50 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className={`${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-800"} p-6 md:p-8 rounded-lg shadow-2xl w-full max-w-md`}
+        className={`${
+          theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-800"
+        } p-6 md:p-8 rounded-lg shadow-2xl w-full max-w-md`}
       >
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          transition={{ duration: 0.2, type: "spring", stiffness: 260, damping: 20 }}
+          transition={{
+            duration: 0.2,
+            type: "spring",
+            stiffness: 260,
+            damping: 20,
+          }}
           className="w-24 h-24 bg-green-500 rounded-full mx-auto mb-6 flex items-center justify-center"
         >
           <FaWhatsapp className="w-16 h-16 text-white" />
         </motion.div>
 
-        <h1 className="text-3xl font-bold text-center mb-6">Whatsapp Login (Email OTP)</h1>
+        <h1 className="text-3xl font-bold text-center mb-6">
+          Whatsapp Login (Email OTP)
+        </h1>
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
         <ProgressBar />
 
         {/* Step 1: Email */}
         {step === 1 && (
-          <form onSubmit={handleLoginSubmit(onLoginSubmit)} className="space-y-4">
+          <form
+            onSubmit={handleLoginSubmit(onLoginSubmit)}
+            className="space-y-4"
+          >
             <input
               type="email"
               {...loginRegister("email")}
               placeholder="Enter your email"
               className="w-full p-2 border rounded"
             />
-            <button type="submit" className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">Send OTP</button>
+            <button
+              type="submit"
+              className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
+            >
+              Send OTP
+            </button>
           </form>
         )}
 
@@ -163,25 +226,35 @@ const UserLogin = () => {
         {step === 2 && (
           <div className="flex flex-col items-center gap-4">
             <div className="flex justify-center gap-2">
-              {Array(6).fill(0).map((_, idx) => (
-                <input
-                  key={idx}
-                  type="text"
-                  maxLength="1"
-                  ref={(el) => (otpRefs.current[idx] = el)}
-                  className="w-12 h-12 text-center border rounded text-xl"
-                  onChange={(e) => handleOtpChange(e, idx)}
-                  onPaste={handleOtpPaste}
-                />
-              ))}
+              {Array(6)
+                .fill(0)
+                .map((_, idx) => (
+                  <input
+                    key={idx}
+                    type="text"
+                    maxLength="1"
+                    ref={(el) => (otpRefs.current[idx] = el)}
+                    className="w-12 h-12 text-center border rounded text-xl"
+                    onChange={(e) => handleOtpChange(e, idx)}
+                    onPaste={handleOtpPaste}
+                  />
+                ))}
             </div>
-            <button onClick={onOtpSubmit} className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">Verify OTP</button>
+            <button
+              onClick={onOtpSubmit}
+              className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
+            >
+              Verify OTP
+            </button>
           </div>
         )}
 
         {/* Step 3: Profile */}
         {step === 3 && (
-          <form onSubmit={handleProfileSubmit(onProfileSubmitHandler)} className="space-y-4">
+          <form
+            onSubmit={handleProfileSubmit(onProfileSubmitHandler)}
+            className="space-y-4"
+          >
             <input
               type="text"
               {...profileRegister("userName")}
@@ -191,7 +264,15 @@ const UserLogin = () => {
 
             <div className="flex gap-2 items-center">
               {(uploadedPic || selectedAvatar) && (
-                <img src={uploadedPic || selectedAvatar} alt="avatar" className="w-16 h-16 rounded-full ring-2 ring-green-500" />
+                <div className="relative w-20 h-20">
+                  <div className="absolute inset-0 rounded-full bg-green-500 flex items-center justify-center">
+                    <img
+                      src={uploadedPic || selectedAvatar}
+                      alt="avatar"
+                      className="w-18 h-18 rounded-full object-cover border-4 border-white"
+                    />
+                  </div>
+                </div>
               )}
               <button
                 type="button"
@@ -200,7 +281,13 @@ const UserLogin = () => {
               >
                 <FaPlus />
               </button>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileUpload}
+              />
             </div>
 
             <label className="flex items-center gap-2">
@@ -208,7 +295,10 @@ const UserLogin = () => {
               <span>I agree to the terms and conditions</span>
             </label>
 
-            <button type="submit" className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
+            <button
+              type="submit"
+              className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
+            >
               Complete Profile
             </button>
           </form>
@@ -219,8 +309,6 @@ const UserLogin = () => {
 };
 
 export default UserLogin;
-
-
 
 // import React, { useState } from "react";
 // import { useLoginStore } from "../../store/use-login-store";

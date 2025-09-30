@@ -1,6 +1,7 @@
-import { uploadFileToCloudinary } from "../configs/cloudinary.js";
+
 import { response } from "../utils/response-handler.js";
 import { Status } from "../models/Status.js";
+import { uploadFileToCloudinary } from "../utils/cloudinaryUpload.js";
 
 export const createStatus = async (req, res) => {
   try {

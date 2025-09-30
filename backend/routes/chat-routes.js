@@ -1,6 +1,6 @@
 import express from "express";
 import { authMiddleware } from "../middlewares/authorize-middleware.js";
-import { multerMiddleware } from "../configs/cloudinary.js";
+
 import {
   deleteMessage,
   getAllConversations,
@@ -8,6 +8,7 @@ import {
   markAsRead,
   sendMessage,
 } from "../controllers/chat-controller.js";
+import { multerMiddleware } from "../middlewares/multer.js";
 
 const router = express.Router();
 

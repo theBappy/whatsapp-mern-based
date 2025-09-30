@@ -1,7 +1,8 @@
-import { uploadFileToCloudinary } from "../configs/cloudinary.js";
+
 import { response } from "../utils/response-handler.js";
 import { Conversation } from "../models/Conversation.js";
 import { Message } from "../models/Message.js";
+import { uploadFileToCloudinary } from "../utils/cloudinaryUpload.js";
 
 export const sendMessage = async (req, res) => {
   try {
@@ -55,8 +56,8 @@ export const sendMessage = async (req, res) => {
 
     await message.save();
 
-    if (message.content) {
-      conversation.lastMessage = message._id;
+    if (message?.content) {
+      conversation.lastMessage = message?._id;
     }
 
     conversation.unreadCount = (conversation.unreadCount || 0) + 1;

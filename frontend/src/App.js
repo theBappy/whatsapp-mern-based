@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import "./App.css";
 import { ToastContainer } from "react-toastify";
@@ -9,8 +9,23 @@ import HomePage from "./components/home-page";
 import UserDetails from "./components/user-details";
 import Status from "./pages/status/status";
 import Setting from "./pages/settings/settings";
+import { useUserStore } from "./store/use-user-store";
+import { disconnectSocket, initializeSocket } from "./services/chat-service";
 
 function App() {
+  const {user} = useUserStore()
+
+  useEffect(()=> {
+    if(user?._id){
+      const socket = initializeSocket()
+    }
+
+    return () => {
+      disconnectSocket()
+    }
+  },[user])
+
+  
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000} />

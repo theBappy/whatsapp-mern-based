@@ -167,11 +167,95 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // send message in real time (TODO: implement)
+  // send message in real time
   sendMessage: async (formData) => {
-    // implement sending logic here
-  },
+    const senderId = formData.get("senderId");
+    const receiverId = formData.get("receiverId");
+    const media = formData.get("media");
+    const content = formData.get("content");
+    const messageStatus = formData.get("messageStatus") || "sending";
 
+    const socket = getSocket();
+    const { conversations } = get();
+
+    let conversationId = null;
+
+    // find conversation between sender and receiver
+    if (conversations?.data?.length > 0) {
+      const conversation = conversations.data.find(
+        (conv) =>
+          conv.participants.some((p) => p._id === senderId) &&
+          conv.participants.some((p) => p._id === receiverId)
+      );
+      if (conversation) {
+        conversationId = conversation._id;
+        set({ currentConversation: conversationId });
+      }
+    }
+
+    // temp optimistic message for UI
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage = {
+      _id: tempId,
+      sender: { _id: senderId },
+      receiver: { _id: receiverId },
+      conversation: conversationId,
+      imageOrVideoUrl:
+        media && typeof media !== "string" ? URL.createObjectURL(media) : null,
+      content,
+      contentType: media
+        ? media.type.startsWith("image")
+          ? "image"
+          : "video"
+        : "text",
+      createdAt: new Date().toISOString(),
+      messageStatus, // "sending"
+    };
+
+    // update state instantly
+    set((state) => ({
+      messages: [...state.messages, optimisticMessage],
+    }));
+
+    try {
+      // 1) Emit socket event for real-time delivery
+      socket.emit("send_message", optimisticMessage);
+
+      // 2) Persist via API
+      const { data } = await axiosInstance.post(
+        "/chats/send-message",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      const messageData = data.data || data;
+
+      // 3) Replace optimistic with actual DB message
+      set((state) => ({
+        messages: state.messages.map((msg) =>
+          msg._id === tempId ? messageData : msg
+        ),
+      }));
+
+      // optional: update status to "sent"
+      socket.emit("message_status_update", {
+        messageIds: [messageData._id],
+        messageStatus: "sent",
+      });
+
+      return messageData;
+    } catch (error) {
+      console.error("❌ Error in sending message", error);
+
+      // mark optimistic as failed
+      set((state) => ({
+        messages: state.messages.map((msg) =>
+          msg._id === tempId ? { ...msg, messageStatus: "failed" } : msg
+        ),
+        error: error?.response?.data?.message || error?.message,
+      }));
+    }
+  },
   receiveMessage: (message) => {
     if (!message) return;
     const { currentConversation, currentUser, messages } = get();
@@ -267,7 +351,7 @@ export const useChatStore = create((set, get) => ({
     const socket = getSocket();
     const { currentUser } = get();
     if (socket && currentUser) {
-      socket.emit("add_reaction", {
+      socket.emit("add_reactions", {
         messageId,
         emoji,
         userId: currentUser?._id,
